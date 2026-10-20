@@ -10,7 +10,7 @@ import (
 )
 
 func TestParsedRequestReplyDoesNotBlockAfterHandlerExit(t *testing.T) {
-	request := httptest.NewRequest(http.MethodGet, "http://example.test/", nil)
+	request := httptest.NewRequest(http.MethodGet, "http://example.test/", http.NoBody)
 	request.Header.Set(IPHeaderName, "192.0.2.1")
 	request.Header.Set(URIHeaderName, "/")
 	request.Header.Set(VerbHeaderName, http.MethodGet)

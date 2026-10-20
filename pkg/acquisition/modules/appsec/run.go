@@ -22,7 +22,7 @@ import (
 
 const appsecShutdownTimeout = 5 * time.Second
 
-// shutdownHTTPServer allows a bounded grace period even if acquisition was cancelled,
+// shutdownHTTPServer allows a bounded grace period even if acquisition was canceled,
 // then closes active connections if graceful shutdown times out.
 func (w *Source) shutdownHTTPServer(ctx context.Context, timeout time.Duration) error {
 	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)

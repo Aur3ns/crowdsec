@@ -46,7 +46,7 @@ func TestDispatchToRunnerShutdown(t *testing.T) {
 		finished := make(chan error, 1)
 
 		go func() {
-			_, err := w.dispatchToRunner(context.Background(), appsec.ParsedRequest{})
+			_, err := w.dispatchToRunner(t.Context(), appsec.ParsedRequest{})
 			finished <- err
 		}()
 
@@ -55,7 +55,7 @@ func TestDispatchToRunnerShutdown(t *testing.T) {
 	})
 
 	t.Run("client disconnect before dispatch", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 
 		w := &Source{InChan: make(chan appsec.ParsedRequest)}
@@ -77,7 +77,7 @@ func TestDispatchToRunnerShutdown(t *testing.T) {
 		request := appsec.ParsedRequest{ResponseChannel: make(chan appsec.AppsecTempResponse, 1)}
 
 		go func() {
-			_, err := w.dispatchToRunner(context.Background(), request)
+			_, err := w.dispatchToRunner(t.Context(), request)
 			finished <- err
 		}()
 
@@ -93,7 +93,7 @@ func TestDispatchToRunnerShutdown(t *testing.T) {
 	})
 
 	t.Run("client disconnect after dispatch", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 
 		w := &Source{InChan: make(chan appsec.ParsedRequest)}
@@ -120,7 +120,7 @@ func TestDispatchToRunnerShutdown(t *testing.T) {
 		w := &Source{InChan: make(chan appsec.ParsedRequest)}
 		finished := make(chan error, 1)
 		go func() {
-			response, err := w.dispatchToRunner(context.Background(), appsec.ParsedRequest{
+			response, err := w.dispatchToRunner(t.Context(), appsec.ParsedRequest{
 				ResponseChannel: make(chan appsec.AppsecTempResponse, 1),
 			})
 			if err == nil && response.InBandInterrupt {
@@ -148,7 +148,7 @@ func TestAppsecHandlerReturnsUnavailableWhenStopping(t *testing.T) {
 	w.shutdown = stopping
 
 	w.AuthCache.Set("valid-key", time.Now().Add(time.Minute))
-	request := httptest.NewRequest(http.MethodPost, "http://example.test/", nil)
+	request := httptest.NewRequest(http.MethodPost, "http://example.test/", http.NoBody)
 	request.Header.Set(appsec.APIKeyHeaderName, "valid-key")
 	request.Header.Set(appsec.IPHeaderName, "192.0.2.1")
 	request.Header.Set(appsec.URIHeaderName, "/")
@@ -195,7 +195,7 @@ func TestShutdownHTTPServerForcesClose(t *testing.T) {
 
 	source := &Source{server: server}
 	started := time.Now()
-	err = source.shutdownHTTPServer(context.Background(), 100*time.Millisecond)
+	err = source.shutdownHTTPServer(t.Context(), 100*time.Millisecond)
 	close(release)
 
 	require.ErrorIs(t, err, context.DeadlineExceeded)
@@ -250,8 +250,8 @@ func TestShutdownHTTPServerAllowsGraceWithCanceledParent(t *testing.T) {
 		t.Fatal("HTTP handler did not start")
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Acquisition is already cancelled when listener shutdown begins.
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel() // Acquisition is already canceled when listener shutdown begins.
 
 	stopped := make(chan error, 1)
 	go func() {
