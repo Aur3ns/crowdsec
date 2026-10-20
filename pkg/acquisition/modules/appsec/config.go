@@ -414,6 +414,15 @@ func (w *Source) checkAuth(ctx context.Context, apiKey string) error {
 // should this be in the runner ?
 func (w *Source) appsecHandler(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	select {
+	case <-w.stopping:
+		rw.WriteHeader(http.StatusServiceUnavailable)
+		return
+	case <-ctx.Done():
+		rw.WriteHeader(http.StatusServiceUnavailable)
+		return
+	default:
+	}
 	w.logger.Debugf("Received request from '%s' on %s", r.RemoteAddr, r.URL.Path)
 
 	apiKey := r.Header.Get(appsec.APIKeyHeaderName)
@@ -454,13 +463,28 @@ func (w *Source) appsecHandler(rw http.ResponseWriter, r *http.Request) {
 
 	metrics.AppsecReqCounter.With(prometheus.Labels{"source": parsedRequest.RemoteAddrNormalized, "appsec_engine": parsedRequest.AppsecEngine}).Inc()
 
-	w.InChan <- parsedRequest
+	select {
+	case w.InChan <- parsedRequest:
+	case <-w.stopping:
+		rw.WriteHeader(http.StatusServiceUnavailable)
+		return
+	case <-ctx.Done():
+		rw.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 
-	/*
-		response is a copy of w.AppSecRuntime.Response that is safe to use.
-		As OutOfBand might still be running, the original one can be modified
-	*/
-	response := <-parsedRequest.ResponseChannel
+	// A runner can stop after accepting a request but before responding.
+	// A buffered response channel also keeps late replies from blocking runners.
+	var response appsec.AppsecTempResponse
+	select {
+	case response = <-parsedRequest.ResponseChannel:
+	case <-w.stopping:
+		rw.WriteHeader(http.StatusServiceUnavailable)
+		return
+	case <-ctx.Done():
+		rw.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
 
 	if response.InBandInterrupt {
 		metrics.AppsecBlockCounter.With(prometheus.Labels{"source": parsedRequest.RemoteAddrNormalized, "appsec_engine": parsedRequest.AppsecEngine}).Inc()
