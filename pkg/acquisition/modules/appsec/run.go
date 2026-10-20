@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"time"
 
 	"gopkg.in/tomb.v2"
 
@@ -19,7 +20,10 @@ import (
 	"github.com/crowdsecurity/crowdsec/pkg/pipeline"
 )
 
+const appsecShutdownTimeout = 5 * time.Second
+
 func (w *Source) listenAndServe(ctx context.Context, t *tomb.Tomb) error {
+	w.stopping = t.Dying()
 	w.logger.Infof("%d appsec runner to start", len(w.AppsecRunners))
 
 	serverError := make(chan error, 2)
@@ -101,12 +105,18 @@ func (w *Source) listenAndServe(ctx context.Context, t *tomb.Tomb) error {
 		// xx let's clean up the appsec runners :)
 		appsec.AppsecRulesDetails = make(map[int]appsec.RulesDetails)
 
-		if err := w.server.Shutdown(ctx); err != nil {
-			w.logger.Errorf("Error shutting down Appsec server: %s", err.Error())
+		shutdownCtx, cancel := context.WithTimeout(ctx, appsecShutdownTimeout)
+		defer cancel()
+
+		if err := w.server.Shutdown(shutdownCtx); err != nil {
+			w.logger.Errorf("Error shutting down Appsec server: %s", err)
+			if err := w.server.Close(); err != nil {
+				w.logger.Errorf("Error force closing Appsec server: %s", err)
+			}
 		}
 
 		if w.AppsecRuntime != nil && w.AppsecRuntime.ChallengeRuntime != nil {
-			if err := w.AppsecRuntime.ChallengeRuntime.Close(ctx); err != nil {
+			if err := w.AppsecRuntime.ChallengeRuntime.Close(shutdownCtx); err != nil {
 				w.logger.Errorf("Error closing challenge runtime: %s", err)
 			}
 		}
