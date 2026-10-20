@@ -59,6 +59,8 @@ jobs:
 
     - name: "Build crowdsec and fixture (DB_BACKEND: pgx)"
       run: |
+        # Keep fixture dumps and restores on the same PostgreSQL major version.
+        export PATH="/usr/lib/postgresql/16/bin:$PATH"
         make clean bats-build bats-fixture BUILD_STATIC=1
       env:
         # fetch the hub index from a git clone to avoid cdn-hub rate limiting (403)
