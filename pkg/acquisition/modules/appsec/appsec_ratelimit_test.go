@@ -39,7 +39,8 @@ func newRateLimitHarness(t *testing.T, preEval ...appsec.Hook) *rateLimitHarness
 		logger:        log.WithField("test", t.Name()),
 		AppsecRuntime: rt,
 	}
-	require.NoError(t, runner.Init(t.TempDir()))
+	// Fork-only CI validation: upstream's rate-limit harness uses the removed Init method.
+	require.NoError(t, runner.InitInBand(t.TempDir()))
 
 	return &rateLimitHarness{t: t, engine: engine, runner: runner, out: out}
 }
