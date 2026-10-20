@@ -22,6 +22,24 @@ import (
 
 const appsecShutdownTimeout = 5 * time.Second
 
+// shutdownHTTPServer completes in-flight requests when possible and closes stuck
+// connections after timeout. A cancelled acquisition context must not skip
+// the grace period.
+func (w *Source) shutdownHTTPServer(ctx context.Context, timeout time.Duration) error {
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
+	defer cancel()
+
+	if err := w.server.Shutdown(shutdownCtx); err != nil {
+		if closeErr := w.server.Close(); closeErr != nil {
+			return fmt.Errorf("appsec HTTP shutdown: %w (forced close failed: %v)", err, closeErr)
+		}
+
+		return fmt.Errorf("appsec HTTP shutdown (connections forcibly closed): %w", err)
+	}
+
+	return nil
+}
+
 func (w *Source) listenAndServe(ctx context.Context, t *tomb.Tomb) error {
 	w.stopping = t.Dying()
 	w.logger.Infof("%d appsec runner to start", len(w.AppsecRunners))
@@ -105,20 +123,16 @@ func (w *Source) listenAndServe(ctx context.Context, t *tomb.Tomb) error {
 		// xx let's clean up the appsec runners :)
 		appsec.AppsecRulesDetails = make(map[int]appsec.RulesDetails)
 
-		shutdownCtx, cancel := context.WithTimeout(ctx, appsecShutdownTimeout)
-		defer cancel()
-
-		if err := w.server.Shutdown(shutdownCtx); err != nil {
+		if err := w.shutdownHTTPServer(ctx, appsecShutdownTimeout); err != nil {
 			w.logger.Errorf("Error shutting down Appsec server: %s", err)
-			if err := w.server.Close(); err != nil {
-				w.logger.Errorf("Error force closing Appsec server: %s", err)
-			}
 		}
 
 		if w.AppsecRuntime != nil && w.AppsecRuntime.ChallengeRuntime != nil {
-			if err := w.AppsecRuntime.ChallengeRuntime.Close(shutdownCtx); err != nil {
+			challengeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), appsecShutdownTimeout)
+			if err := w.AppsecRuntime.ChallengeRuntime.Close(challengeCtx); err != nil {
 				w.logger.Errorf("Error closing challenge runtime: %s", err)
 			}
+			cancel()
 		}
 
 		if w.config.ListenSocket != "" {
