@@ -59,6 +59,8 @@ jobs:
 
     - name: "Build crowdsec and fixture (DB_BACKEND: pgx)"
       run: |
+        # Keep fixture dumps and restores on the same PostgreSQL major version.
+        export PATH="/usr/lib/postgresql/16/bin:$PATH"
         make clean bats-build bats-fixture BUILD_STATIC=1
       env:
         # fetch the hub index from a git clone to avoid cdn-hub rate limiting (403)
@@ -70,7 +72,10 @@ jobs:
         PGUSER: postgres
 
     - name: "Run tests (DB_BACKEND: pgx)"
-      run: ./test/run-tests ./test/bats --formatter $(pwd)/test/lib/color-formatter
+      run: |
+        # Use PostgreSQL 16 client tools with the PostgreSQL 16 CI service.
+        export PATH="/usr/lib/postgresql/16/bin:$PATH"
+        ./test/run-tests ./test/bats --formatter $(pwd)/test/lib/color-formatter
       env:
         DB_BACKEND: pgx
         PGHOST: 127.0.0.1

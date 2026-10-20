@@ -22,6 +22,7 @@ type Source struct {
 	logger                *log.Entry
 	mux                   *http.ServeMux
 	server                *http.Server
+	shutdown              <-chan struct{}
 	InChan                chan appsec.ParsedRequest
 	AppsecRuntime         *appsec.AppsecRuntimeConfig
 	AppsecConfigs         map[string]appsec.AppsecConfig
