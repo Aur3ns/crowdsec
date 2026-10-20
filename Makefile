@@ -3,6 +3,10 @@ ifneq ($(firstword $(sort $(MAKE_VERSION) 4.1)),4.1)
     $(error Your make is too old ($(MAKE_VERSION)). Please install GNU make >= 4.1)
 endif
 
+# Fork-only CI validation: GitHub forks may lack upstream release tags.
+# This branch is never intended for an upstream contribution.
+BUILD_VERSION ?= v1.8.1-dev-forkci
+
 include build/mk/platform.mk
 include build/mk/gmsl/gmsl
 
