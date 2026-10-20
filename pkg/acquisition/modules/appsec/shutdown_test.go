@@ -33,7 +33,7 @@ func newShutdownTestSource() (*Source, chan struct{}) {
 				BouncerPassedHTTPCode: http.StatusOK,
 			},
 		},
-		stopping: stopping,
+		stopping:      stopping,
 	}
 	source.AuthCache.Set("test-key", time.Now().Add(time.Minute))
 
