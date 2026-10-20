@@ -11,7 +11,6 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/tomb.v2"
 
 	"github.com/crowdsecurity/crowdsec/pkg/appsec"
 )
@@ -170,23 +169,9 @@ func TestAppsecShutdownClosesStuckConnections(t *testing.T) {
 		t.Fatal("test HTTP request never reached the server")
 	}
 
-	logger := log.New()
-	logger.SetOutput(io.Discard)
-	source := &Source{logger: log.NewEntry(logger), server: server}
-	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
-	defer cancel()
-
-	tb := &tomb.Tomb{}
-	shutdownDone := make(chan error, 1)
-	go func() { shutdownDone <- source.listenAndServe(ctx, tb) }()
-	tb.Kill(nil)
-
-	select {
-	case err := <-shutdownDone:
-		require.NoError(t, err)
-	case <-time.After(2 * time.Second):
-		t.Fatal("AppSec listener did not stop after shutdown deadline")
-	}
+	source := &Source{server: server}
+	err = source.shutdownHTTPServer(t.Context(), 100*time.Millisecond)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
 
 	select {
 	case err := <-requestDone:
@@ -198,6 +183,94 @@ func TestAppsecShutdownClosesStuckConnections(t *testing.T) {
 	select {
 	case <-serveDone:
 	case <-time.After(2 * time.Second):
+		t.Fatal("HTTP Serve goroutine did not exit")
+	}
+}
+
+func TestAppsecShutdownIgnoresCancelledParent(t *testing.T) {
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	defer func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	}()
+
+	handler := http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
+		close(entered)
+		<-release
+		rw.WriteHeader(http.StatusNoContent)
+	})
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	server := &http.Server{Handler: handler}
+	defer server.Close()
+
+	shutdownStarted := make(chan struct{})
+	server.RegisterOnShutdown(func() { close(shutdownStarted) })
+
+	serveDone := make(chan error, 1)
+	go func() { serveDone <- server.Serve(listener) }()
+
+	type httpResult struct {
+		status int
+		err    error
+	}
+	requestDone := make(chan httpResult, 1)
+	go func() {
+		res, err := (&http.Client{Timeout: 3 * time.Second}).Get("http://" + listener.Addr().String())
+		if err != nil {
+			requestDone <- httpResult{err: err}
+			return
+		}
+		defer res.Body.Close()
+		requestDone <- httpResult{status: res.StatusCode}
+	}()
+
+	select {
+	case <-entered:
+	case <-time.After(3 * time.Second):
+		t.Fatal("test HTTP request never reached the server")
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	source := &Source{server: server}
+	shutdownDone := make(chan error, 1)
+	go func() { shutdownDone <- source.shutdownHTTPServer(ctx, time.Second) }()
+
+	select {
+	case <-shutdownStarted:
+	case <-time.After(3 * time.Second):
+		t.Fatal("HTTP shutdown never started")
+	}
+
+	// Cancellation of ctx must not force-close an otherwise finishing request.
+	close(release)
+
+	select {
+	case err := <-shutdownDone:
+		require.NoError(t, err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("graceful shutdown did not finish")
+	}
+
+	select {
+	case result := <-requestDone:
+		require.NoError(t, result.err)
+		require.Equal(t, http.StatusNoContent, result.status)
+	case <-time.After(3 * time.Second):
+		t.Fatal("in-flight HTTP request did not finish")
+	}
+
+	select {
+	case <-serveDone:
+	case <-time.After(3 * time.Second):
 		t.Fatal("HTTP Serve goroutine did not exit")
 	}
 }
