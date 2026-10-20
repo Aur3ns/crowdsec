@@ -3,6 +3,10 @@ ifneq ($(firstword $(sort $(MAKE_VERSION) 4.1)),4.1)
     $(error Your make is too old ($(MAKE_VERSION)). Please install GNU make >= 4.1)
 endif
 
+# FORK-ONLY validation: upstream release tags are not present in this fork.
+# Never include this Makefile change in the upstream CrowdSec pull request.
+BUILD_VERSION ?= v1.8.1-dev-forkci
+
 include build/mk/platform.mk
 include build/mk/gmsl/gmsl
 
