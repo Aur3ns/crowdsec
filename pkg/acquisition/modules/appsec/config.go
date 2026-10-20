@@ -414,15 +414,6 @@ func (w *Source) checkAuth(ctx context.Context, apiKey string) error {
 // should this be in the runner ?
 func (w *Source) appsecHandler(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	select {
-	case <-w.stopping:
-		rw.WriteHeader(http.StatusServiceUnavailable)
-		return
-	case <-ctx.Done():
-		rw.WriteHeader(http.StatusServiceUnavailable)
-		return
-	default:
-	}
 	w.logger.Debugf("Received request from '%s' on %s", r.RemoteAddr, r.URL.Path)
 
 	apiKey := r.Header.Get(appsec.APIKeyHeaderName)
