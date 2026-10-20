@@ -335,6 +335,10 @@ force_inotify: true`, testPattern),
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			// Windows does not support POSIX chmod permission semantics.
+			if runtime.GOOS == "windows" && tc.name == "GlobInotifyChmod" {
+				t.Skip("chmod(000) cannot be tested reliably on Windows")
+			}
 			logger, hook := test.NewNullLogger()
 			logger.SetLevel(tc.logLevel)
 

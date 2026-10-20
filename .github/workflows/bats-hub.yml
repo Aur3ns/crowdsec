@@ -52,12 +52,14 @@ jobs:
       run: |
           PATH=$(pwd)/test/local/bin:$PATH
           ./test/instance-data load
-          git clone --depth 1 https://github.com/crowdsecurity/hub.git ./hub
-          cd ./hub
+          # Unix-domain sockets have a small pathname limit; keep hub fixtures
+          # out of the long GitHub Actions workspace prefix.
+          git clone --depth 1 https://github.com/crowdsecurity/hub.git /tmp/crowdsec-hub-ci
+          cd /tmp/crowdsec-hub-ci
           cscli hubtest run --all --clean --max-jobs 4
 
     - name: "Collect hub coverage"
-      run: ./test/bin/collect-hub-coverage ./hub >> $GITHUB_ENV
+      run: ./test/bin/collect-hub-coverage /tmp/crowdsec-hub-ci >> $GITHUB_ENV
 
     - name: "Update coverage badges"
       if: ${{ github.ref == 'refs/heads/master' && github.repository_owner == 'crowdsecurity' }}

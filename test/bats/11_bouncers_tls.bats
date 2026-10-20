@@ -196,7 +196,7 @@ teardown() {
         --key "$tmpdir/leaf_invalid-key.pem" \
         --cacert "$tmpdir/root-key.pem" \
         https://localhost:8080/v1/decisions\?ip=42.42.42.42
-    assert_stderr --partial 'error setting certificate file'
+    assert_stderr --regexp 'error (setting certificate file|adding trust anchors from file)'
     rune -0 cscli bouncers list -o json
     assert_output "[]"
 }
