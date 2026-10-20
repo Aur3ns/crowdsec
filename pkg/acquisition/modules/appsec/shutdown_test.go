@@ -27,8 +27,13 @@ func newShutdownTestSource() (*Source, chan struct{}) {
 		config:        Configuration{Name: "test-appsec", BodyReadTimeout: &bodyTimeout},
 		AuthCache:     NewAuthCache(),
 		InChan:        make(chan appsec.ParsedRequest),
-		AppsecRuntime: &appsec.AppsecRuntimeConfig{},
-		stopping:      stopping,
+		AppsecRuntime: &appsec.AppsecRuntimeConfig{
+			Config: &appsec.AppsecConfig{
+				UserPassedHTTPCode:    http.StatusOK,
+				BouncerPassedHTTPCode: http.StatusOK,
+			},
+		},
+		stopping: stopping,
 	}
 	source.AuthCache.Set("test-key", time.Now().Add(time.Minute))
 
@@ -99,6 +104,34 @@ func TestAppsecHandlerStopsWaitingOnShutdown(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestAppsecHandlerServesNormalResponse(t *testing.T) {
+	source, _ := newShutdownTestSource()
+	result := make(chan *httptest.ResponseRecorder, 1)
+
+	go func() {
+		recorder := httptest.NewRecorder()
+		source.appsecHandler(recorder, shutdownTestRequest(t.Context()))
+		result <- recorder
+	}()
+
+	var request appsec.ParsedRequest
+	select {
+	case request = <-source.InChan:
+	case <-time.After(3 * time.Second):
+		t.Fatal("handler did not send a normal request to the runner")
+	}
+
+	request.ResponseChannel <- appsec.AppsecTempResponse{Action: appsec.AllowRemediation}
+
+	select {
+	case response := <-result:
+		require.Equal(t, http.StatusOK, response.Code)
+		require.Contains(t, response.Body.String(), "allow")
+	case <-time.After(3 * time.Second):
+		t.Fatal("handler did not return the runner response")
 	}
 }
 
