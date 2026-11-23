@@ -211,6 +211,14 @@ filename: %s`, deletedFile),
 	}
 }
 
+// A chmod(000) permission test is not meaningful on Windows file systems.
+func skipPOSIXChmodTestOnWindows(t *testing.T, name string) {
+	t.Helper()
+	if runtime.GOOS == "windows" && name == "GlobInotifyChmod" {
+		t.Skip("chmod(000) cannot be tested reliably on Windows")
+	}
+}
+
 func TestLiveAcquisition(t *testing.T) {
 	ctx := t.Context()
 	permDeniedFile := "/etc/shadow"
@@ -335,6 +343,7 @@ force_inotify: true`, testPattern),
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			skipPOSIXChmodTestOnWindows(t, tc.name)
 			logger, hook := test.NewNullLogger()
 			logger.SetLevel(tc.logLevel)
 
