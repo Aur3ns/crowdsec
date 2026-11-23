@@ -18,5 +18,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: AppSec package compile and targeted regression tests
-        run: go test -count=1 -run 'Test.*(Shutdown|Response)' ./pkg/appsec ./pkg/acquisition/modules/appsec
+      - name: AppSec full package tests
+        run: go test -count=1 ./pkg/appsec ./pkg/acquisition/modules/appsec
+      - name: Shutdown regression tests under race detector
+        run: go test -race -count=1 -v -run 'Test.*(Shutdown|Response)' ./pkg/appsec ./pkg/acquisition/modules/appsec
